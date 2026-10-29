@@ -1,0 +1,170 @@
+# C.L.N.K.R. equivalents of the TDO prototype slice, plus the Crawler.
+# Same authoring rules as units/tdo.yaml. Assault Laser is the mobile
+# ground unit that can hit air (there is no separate mobile SAM on this roster).
+
+units:
+  - id: clnkr_warhorse
+    name: Warhorse
+    faction: clnkr
+    domain: ground
+    role: transport
+    shape: box
+    cost: 1000
+    per_order: 1
+    build_s: 3
+    hp: 140
+    speed: 2.15
+    sight: 12
+    weapon_slots: 0
+    weapons: []
+
+  - id: clnkr_scout
+    name: Scout Drone
+    faction: clnkr
+    domain: ground
+    role: combat
+    shape: capsule
+    cost: 750
+    per_order: 1
+    build_s: 3
+    hp: 30
+    speed: 5.66
+    sight: 12
+    weapon_slots: 2
+    weapons:
+      - id: mg
+        damage: 1
+        damage_troop: 1
+        salvo: 4
+        salvo_interval_s: 0.05
+        cooldown_s: 0.8
+        range: 4
+        targets: [ground, ship]
+        projectile_speed: 22
+
+  - id: clnkr_mk1
+    name: Mk I Walker
+    faction: clnkr
+    domain: ground
+    role: combat
+    shape: tank
+    cost: 1300
+    per_order: 1
+    build_s: 5
+    hp: 81
+    speed: 3.01
+    sight: 12
+    weapon_slots: 2
+    weapons:
+      - id: cannon
+        damage: 5
+        damage_troop: 2
+        salvo: 1
+        cooldown_s: 1.2
+        range: 8
+        targets: [ground, ship]
+        projectile_speed: 18
+
+  - id: clnkr_assault_laser
+    name: Assault Laser
+    faction: clnkr
+    domain: ground
+    role: combat
+    shape: sam
+    cost: 2500
+    per_order: 1
+    build_s: 7
+    hp: 180
+    speed: 3.01
+    sight: 12
+    weapon_slots: 2
+    weapons:
+      - id: beam
+        damage: 12
+        salvo: 1
+        cooldown_s: 0.7
+        range: 6
+        targets: [air, ground, ship]
+        projectile_speed: 40
+      - id: pulse
+        damage: 9
+        salvo: 1
+        cooldown_s: 0.9
+        range: 6
+        targets: [air, ground, ship]
+        projectile_speed: 40
+
+  - id: clnkr_hauler
+    name: Crawler
+    faction: clnkr
+    domain: ground
+    role: hauler
+    shape: hauler
+    cost: 500
+    per_order: 1
+    build_s: 3
+    hp: 100
+    speed: 1.72
+    sight: 12
+    cargo: 500
+    weapon_slots: 0
+    weapons: []
+
+  - id: clnkr_bird
+    name: Bird of Prey
+    faction: clnkr
+    domain: air
+    role: combat
+    shape: air
+    cost: 3500
+    per_order: 1
+    build_s: 7
+    hp: 68
+    speed: 4.30
+    sight: 12
+    weapon_slots: 3
+    weapons:
+      - id: cannon
+        damage: 12
+        salvo: 1
+        cooldown_s: 0.5
+        range: 16
+        targets: [air, ground, ship]
+        projectile_speed: 24
+      - id: rocket
+        damage: 30
+        salvo: 1
+        cooldown_s: 1.6
+        range: 16
+        targets: [air, ground, ship]
+        projectile_speed: 14
+
+  - id: clnkr_constructobot
+    name: Constructobot
+    faction: clnkr
+    domain: troop
+    role: constructor
+    shape: capsule
+    cost: 1100
+    per_order: 1
+    build_s: 7
+    hp: 14
+    speed: 0.86
+    sight: 12
+    weapon_slots: 0
+    weapons: []
+
+  - id: clnkr_agent
+    name: Agent
+    faction: clnkr
+    domain: troop
+    role: hacker
+    shape: capsule
+    cost: 2000
+    per_order: 1
+    build_s: 5
+    hp: 18
+    speed: 1.05
+    sight: 12
+    weapon_slots: 0
+    weapons: []

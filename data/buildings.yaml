@@ -1,0 +1,67 @@
+# Refineries and collectors start on the test map. Constructors can also place them.
+# speed is omitted; buildings are static.
+# Mining Site / Resource Collector figures are the "waiting on testing" defaults.
+
+buildings:
+  - id: tdo_refinery
+    name: Refinery
+    faction: tdo
+    role: refinery
+    shape: building
+    domain: ground
+    cost: 1000
+    hp: 1000
+    footprint: 3
+    storage_cap: 10000
+    sight: 12
+    build_s: 20
+
+  - id: tdo_mine
+    name: Mining Site
+    faction: tdo
+    role: collector
+    shape: building
+    domain: ground
+    cost: 800
+    hp: 400
+    footprint: 2
+    buffer: 1000
+    sight: 12
+    build_s: 12
+
+  - id: clnkr_refinery
+    name: Reclamation Plant
+    faction: clnkr
+    role: refinery
+    shape: building
+    domain: ground
+    cost: 1000
+    hp: 1000
+    footprint: 3
+    storage_cap: 10000
+    sight: 12
+    build_s: 20
+
+  - id: clnkr_mine
+    name: Resource Collector
+    faction: clnkr
+    role: collector
+    shape: building
+    domain: ground
+    cost: 800
+    hp: 400
+    footprint: 2
+    buffer: 1000
+    sight: 12
+    build_s: 12
+
+  # Neutral hack site. HP is a placeholder: the design tables do not list it.
+  - id: computer_centre
+    name: Computer Centre
+    role: computer_centre
+    shape: building
+    domain: ground
+    cost: 0
+    hp: 800
+    footprint: 2
+    sight: 8
