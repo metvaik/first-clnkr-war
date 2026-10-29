@@ -7,11 +7,12 @@ public partial class GameRoot : Node3D
 {
     private DataCatalog _data = null!;
     private Simulation _sim = null!;
-    private InputBindings _keys = null!;
-    private RtsCamera _camera = null!;
-    private BattlefieldView _field = null!;
-    private DebugHud _hud = null!;
-    private ColorRect _box = null!;
+    private InputBindings _keys = new();
+    private RtsCamera? _camera;
+    private BattlefieldView? _field;
+    private DebugHud? _hud;
+    private ColorRect? _box;
+    private bool _booted;
     private readonly HashSet<int> _selected = new();
     private readonly List<int>[][] _groupsByPlayer = CreateGroups();
     private double _accum;
@@ -25,9 +26,19 @@ public partial class GameRoot : Node3D
     private ulong _lastGroupMs;
     private string? _placeTypeId;
 
+    public override void _EnterTree()
+    {
+        // Ready is flushed after enter-tree. A process tick in between
+        // used to hit UpdateCamera before _keys and the rig existed.
+        SetProcess(false);
+    }
+
     public override void _Ready()
     {
-        GetWindow().Title = "The First C.L.N.K.R. War — Phase 1";
+        SetProcess(false);
+        var window = GetWindow();
+        if (window != null)
+            window.Title = "The First C.L.N.K.R. War — Phase 1";
         _data = CatalogLoader.Load(ReadDocuments());
         _keys = InputBindings.Load(ReadText("res://data/controls.yaml"));
         _sim = PrototypeScenario.Create(_data);
@@ -37,6 +48,7 @@ public partial class GameRoot : Node3D
             PitchDegrees = _keys.StartPitch,
             Distance = _keys.StartZoom,
         };
+        _camera.EnsureRig();
         AddChild(_camera);
 
         _field = new BattlefieldView();
@@ -58,11 +70,15 @@ public partial class GameRoot : Node3D
         AddChild(_hud);
 
         SetPlayer(0);
+        _booted = true;
+        SetProcess(true);
         GD.Print($"Phase 1 ready. Tick {_data.Rules.TickHz} Hz. Entities {_sim.Entities.Count}.");
     }
 
     public override void _Process(double delta)
     {
+        if (!_booted || _sim == null || _camera == null || _field == null || _hud == null)
+            return;
         UpdateCamera((float)delta);
         if (!_paused)
         {
@@ -93,6 +109,8 @@ public partial class GameRoot : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (!_booted || _sim == null || _camera == null || _field == null)
+            return;
         if (@event is InputEventMouseButton mouse)
         {
             HandleMouseButton(mouse);
@@ -126,37 +144,37 @@ public partial class GameRoot : Node3D
         if (key.PhysicalKeycode == _keys.SwitchPlayer)
         {
             SetPlayer((_player + 1) % _sim.Players.Length);
-            GetViewport().SetInputAsHandled();
+            GetViewport()?.SetInputAsHandled();
             return;
         }
         if (key.PhysicalKeycode == _keys.Pause)
         {
             _paused = !_paused;
-            GetViewport().SetInputAsHandled();
+            GetViewport()?.SetInputAsHandled();
             return;
         }
         if (key.PhysicalKeycode == _keys.FocusBase)
         {
             FocusPlayer(_player);
-            GetViewport().SetInputAsHandled();
+            GetViewport()?.SetInputAsHandled();
             return;
         }
         if (key.PhysicalKeycode == _keys.PlaceRefinery)
         {
             _placeTypeId = BuildingId("refinery");
-            GetViewport().SetInputAsHandled();
+            GetViewport()?.SetInputAsHandled();
             return;
         }
         if (key.PhysicalKeycode == _keys.PlaceCollector)
         {
             _placeTypeId = BuildingId("collector");
-            GetViewport().SetInputAsHandled();
+            GetViewport()?.SetInputAsHandled();
             return;
         }
         if (key.PhysicalKeycode == _keys.Stop)
         {
             Issue(CommandKind.Stop, _selected, Fp.Zero, Fp.Zero, 0);
-            GetViewport().SetInputAsHandled();
+            GetViewport()?.SetInputAsHandled();
             return;
         }
 
@@ -185,11 +203,13 @@ public partial class GameRoot : Node3D
             _lastGroup = digit;
             _lastGroupMs = now;
         }
-        GetViewport().SetInputAsHandled();
+        GetViewport()?.SetInputAsHandled();
     }
 
     private void HandleMouseButton(InputEventMouseButton mouse)
     {
+        if (_camera == null)
+            return;
         if (mouse.ButtonIndex == MouseButton.WheelUp && mouse.Pressed)
         {
             _camera.Distance = Mathf.Max(_keys.MinZoom, _camera.Distance - _keys.ZoomStep);
@@ -214,12 +234,14 @@ public partial class GameRoot : Node3D
             {
                 _dragging = true;
                 _dragStart = mouse.Position;
-                _box.Visible = false;
+                if (_box != null)
+                    _box.Visible = false;
             }
             else if (_dragging)
             {
                 _dragging = false;
-                _box.Visible = false;
+                if (_box != null)
+                    _box.Visible = false;
                 FinishSelect(mouse.Position, mouse.ShiftPressed);
             }
             return;
@@ -237,6 +259,8 @@ public partial class GameRoot : Node3D
 
     private void FinishSelect(Vector2 end, bool shift)
     {
+        if (_field == null)
+            return;
         var rect = new Rect2(
             Mathf.Min(_dragStart.X, end.X),
             Mathf.Min(_dragStart.Y, end.Y),
@@ -274,7 +298,7 @@ public partial class GameRoot : Node3D
 
     private void IssueOrder(Vector2 screen)
     {
-        if (_selected.Count == 0)
+        if (_field == null || _selected.Count == 0)
             return;
         var clicked = _field.PickAny(screen, _player);
         if (clicked != null && clicked.Role == Roles.ComputerCentre && SelectionHas(Roles.Hacker))
@@ -349,6 +373,8 @@ public partial class GameRoot : Node3D
 
     private void UpdateCamera(float delta)
     {
+        if (_camera == null)
+            return;
         float right = 0f;
         float back = 0f;
         if (_keys.IsDown(_keys.PanRight) || Input.IsPhysicalKeyPressed(Key.Right))
@@ -368,10 +394,11 @@ public partial class GameRoot : Node3D
         if (_keys.IsDown(_keys.TiltDown))
             _camera.PitchDegrees = Mathf.Clamp(_camera.PitchDegrees + _keys.TiltSpeed * delta, _keys.MinPitch, _keys.MaxPitch);
 
-        if (_keys.EdgeScroll)
+        var viewport = GetViewport();
+        if (_keys.EdgeScroll && viewport != null)
         {
-            var mouse = GetViewport().GetMousePosition();
-            var size = GetViewport().GetVisibleRect().Size;
+            var mouse = viewport.GetMousePosition();
+            var size = viewport.GetVisibleRect().Size;
             const float margin = 10f;
             if (mouse.X >= 0f && mouse.Y >= 0f && mouse.X <= size.X && mouse.Y <= size.Y)
             {
@@ -391,9 +418,9 @@ public partial class GameRoot : Node3D
         _camera.ClampToMap(PrototypeScenario.MapSize * VisualScale.Tile);
         _camera.ApplyRig();
 
-        if (_dragging)
+        if (_dragging && _box != null && viewport != null)
         {
-            var mouse = GetViewport().GetMousePosition();
+            var mouse = viewport.GetMousePosition();
             _box.Visible = true;
             _box.Position = new Vector2(Mathf.Min(_dragStart.X, mouse.X), Mathf.Min(_dragStart.Y, mouse.Y));
             _box.Size = new Vector2(Mathf.Abs(_dragStart.X - mouse.X), Mathf.Abs(_dragStart.Y - mouse.Y));
@@ -404,12 +431,14 @@ public partial class GameRoot : Node3D
     {
         _player = player;
         _selected.Clear();
-        _hud.SetPlayerSilent(player);
+        _hud?.SetPlayerSilent(player);
         FocusPlayer(player);
     }
 
     private void FocusPlayer(int player)
     {
+        if (_field == null || _camera == null)
+            return;
         var focus = _field.FocusOf(player);
         _camera.Position = new Vector3(focus.X, 0f, focus.Z);
         _camera.ClampToMap(PrototypeScenario.MapSize * VisualScale.Tile);
@@ -417,6 +446,8 @@ public partial class GameRoot : Node3D
 
     private void FocusSelection()
     {
+        if (_camera == null)
+            return;
         Vector3 sum = Vector3.Zero;
         int count = 0;
         foreach (var id in _selected)

@@ -40,6 +40,8 @@ public partial class BattlefieldView : Node3D
 
     public void Sync(Simulation sim, float alpha, int player, HashSet<int> selected)
     {
+        if (_camera == null || sim == null)
+            return;
         alpha = Mathf.Clamp(alpha, 0f, 1f);
         SyncFog(sim, player);
         _drop.Clear();
@@ -222,6 +224,8 @@ public partial class BattlefieldView : Node3D
 
     private void SyncFog(Simulation sim, int player)
     {
+        if (_fog == null || (uint)player >= (uint)sim.Fog.Length)
+            return;
         if (player == _fogPlayer && sim.Tick == _fogTick)
             return;
         _fogPlayer = player;

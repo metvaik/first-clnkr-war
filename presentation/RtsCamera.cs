@@ -8,13 +8,36 @@ public partial class RtsCamera : Node3D
     public float PitchDegrees { get; set; } = 55f;
     public float Distance { get; set; } = 72f;
 
-    private Node3D _pitch = null!;
-    private Camera3D _camera = null!;
+    private Node3D? _pitch;
+    private Camera3D? _camera;
 
-    public Camera3D Camera => _camera;
+    public Camera3D Camera
+    {
+        get
+        {
+            EnsureRig();
+            return _camera!;
+        }
+    }
 
     public override void _Ready()
     {
+        EnsureRig();
+    }
+
+    /// <summary>
+    /// Builds the yaw/pitch/camera nodes as soon as the rig exists.
+    /// Child _Ready can run after the parent finishes, so GameRoot must not
+    /// wait for that callback before it reads the camera.
+    /// </summary>
+    public void EnsureRig()
+    {
+        if (_pitch != null && _camera != null)
+        {
+            ApplyRig();
+            return;
+        }
+
         _pitch = new Node3D { Name = "Pitch" };
         AddChild(_pitch);
         _camera = new Camera3D
@@ -30,6 +53,8 @@ public partial class RtsCamera : Node3D
 
     public void ApplyRig()
     {
+        if (_pitch == null || _camera == null)
+            return;
         RotationDegrees = new Vector3(0f, YawDegrees, 0f);
         _pitch.RotationDegrees = new Vector3(-PitchDegrees, 0f, 0f);
         _camera.Position = new Vector3(0f, 0f, Distance);

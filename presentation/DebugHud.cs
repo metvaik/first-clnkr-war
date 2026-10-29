@@ -56,12 +56,18 @@ public partial class DebugHud : CanvasLayer
 
     public void SetPlayerSilent(int player)
     {
+        if (_player == null)
+            return;
         _suppress = true;
         _player.Selected = player;
         _suppress = false;
     }
 
-    public void SetText(string text) => _body.Text = text;
+    public void SetText(string text)
+    {
+        if (_body != null)
+            _body.Text = text;
+    }
 
     private void OnPlayer(long index)
     {
