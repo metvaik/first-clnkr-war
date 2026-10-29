@@ -1,0 +1,11 @@
+.godot/
+.mono/
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+TestResults/
+*.DotSettings.user
+.DS_Store

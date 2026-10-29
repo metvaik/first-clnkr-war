@@ -1,0 +1,52 @@
+# Starting buildings. Placement and construction are stubbed:
+# the test map spawns these directly. speed is omitted; buildings are static.
+# Mining Site / Resource Collector figures are the "waiting on testing" defaults.
+
+buildings:
+  - id: tdo_refinery
+    name: Refinery
+    faction: tdo
+    role: refinery
+    shape: building
+    domain: ground
+    cost: 1000
+    hp: 1000
+    footprint: 3
+    storage_cap: 10000
+    sight: 12
+
+  - id: tdo_mine
+    name: Mining Site
+    faction: tdo
+    role: collector
+    shape: building
+    domain: ground
+    cost: 800
+    hp: 400
+    footprint: 2
+    buffer: 1000
+    sight: 12
+
+  - id: clnkr_refinery
+    name: Reclamation Plant
+    faction: clnkr
+    role: refinery
+    shape: building
+    domain: ground
+    cost: 1000
+    hp: 1000
+    footprint: 3
+    storage_cap: 10000
+    sight: 12
+
+  - id: clnkr_mine
+    name: Resource Collector
+    faction: clnkr
+    role: collector
+    shape: building
+    domain: ground
+    cost: 800
+    hp: 400
+    footprint: 2
+    buffer: 1000
+    sight: 12

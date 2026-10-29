@@ -1,0 +1,48 @@
+# Tunable match rules. Values marked in the design as "waiting on testing"
+# are the defaults below. Speeds in unit files are small tiles per second;
+# the sim converts them with sim.tick_hz, so positions stay deterministic
+# if the tick rate changes.
+
+sim:
+  tick_hz: 20
+
+limits:
+  sight_max_tiles: 20
+  range_bonus_max_pct: 25
+  control_groups: 10
+  selection_max: 512
+  projectile_pool: 16384
+  population_cap: 300
+
+combat:
+  # Staggered target searches and fog refreshes (every N sim ticks).
+  target_search_interval_ticks: 8
+  fog_update_interval_ticks: 6
+
+movement:
+  # Soft separation radius so whitebox bodies do not occupy one point.
+  separation_tiles: 0.5
+
+pathfinding:
+  requests_per_tick: 8
+
+economy:
+  # Mining rate is not in the design tables yet (waiting on testing).
+  mining_rate_per_s: 40
+  # Load rate is a prototype default. Unload is the design's 100 credits/s.
+  load_units_per_s: 100
+  unload_credits_per_s: 100
+  hauler_capacity: 500
+  refinery_storage_cap: 10000
+  site_buffer: 1000
+  rare_earth_multiplier: 2
+  starting_credits: 2500
+
+players:
+  starting_firepower: 0
+  starting_armour: 0
+  starting_speed: 0
+
+schema:
+  # Transform time when a transformable unit omits transform_s.
+  transform_s_default: 3

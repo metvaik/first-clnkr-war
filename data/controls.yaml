@@ -1,0 +1,30 @@
+# Prototype bindings. Final hotkeys are intentionally not locked
+# (design: controls are decided after the prototype).
+# Control groups stay on keys 0-9, matching the design limit.
+# Camera speeds are presentation-only; they are not sim state.
+
+pan_up: W
+pan_down: S
+pan_left: A
+pan_right: D
+rotate_left: Q
+rotate_right: E
+tilt_up: R
+tilt_down: F
+stop: H
+attack_move: Z
+switch_player: Tab
+pause: Space
+focus_base: Home
+
+edge_scroll: true
+pan_speed: 40
+rotate_speed: 80
+tilt_speed: 40
+zoom_step: 6
+min_pitch: 25
+max_pitch: 80
+min_zoom: 14
+max_zoom: 220
+start_pitch: 55
+start_zoom: 72

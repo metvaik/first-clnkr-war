@@ -1,0 +1,8 @@
+# Whitebox colours for the two original factions. No shared bonuses.
+factions:
+  - id: tdo
+    name: TDO
+    color: [56, 122, 242]
+  - id: clnkr
+    name: C.L.N.K.R.
+    color: [235, 96, 30]

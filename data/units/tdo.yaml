@@ -1,0 +1,142 @@
+# TDO slice for the Phase 1 prototype.
+# Speeds: small tiles per second. Range and sight: small tiles.
+# cooldown_s, salvo_interval_s and projectile_speed are prototype defaults.
+# The design tables do not publish a rate of fire (Phase 2 checks that).
+# Sight uses the normal class (12) unless sight_by_target is set.
+# Per-unit sight classes are still waiting on testing.
+# weapon_slots copies the table's weapon-count column. Only published
+# damage channels are actually fired; extra slots are not invented.
+
+units:
+  - id: tdo_apc
+    name: APC
+    faction: tdo
+    domain: ground
+    role: transport
+    shape: box
+    cost: 750
+    per_order: 1
+    build_s: 3
+    hp: 100
+    speed: 3.01
+    sight: 12
+    weapon_slots: 0
+    weapons: []
+
+  - id: tdo_jeep
+    name: Jeep
+    faction: tdo
+    domain: ground
+    role: combat
+    shape: capsule
+    cost: 500
+    per_order: 1
+    build_s: 3
+    hp: 35
+    speed: 4.49
+    sight: 12
+    weapon_slots: 1
+    weapons:
+      - id: mg
+        damage: 1
+        damage_troop: 1
+        salvo: 5
+        salvo_interval_s: 0.05
+        cooldown_s: 0.8
+        range: 4
+        targets: [ground, ship]
+        projectile_speed: 22
+
+  - id: tdo_dragoon
+    name: Dragoon Tank
+    faction: tdo
+    domain: ground
+    role: combat
+    shape: tank
+    cost: 1000
+    per_order: 1
+    build_s: 5
+    hp: 72
+    speed: 2.15
+    sight: 12
+    weapon_slots: 1
+    weapons:
+      - id: cannon
+        damage: 10
+        damage_troop: 3
+        salvo: 1
+        cooldown_s: 1.5
+        range: 8
+        targets: [ground, ship]
+        projectile_speed: 18
+
+  - id: tdo_sam
+    name: Mobile SAM
+    faction: tdo
+    domain: ground
+    role: combat
+    shape: sam
+    cost: 2500
+    per_order: 1
+    build_s: 7
+    hp: 120
+    speed: 3.01
+    sight: 12
+    sight_by_target:
+      air: 20
+    weapon_slots: 4
+    weapons:
+      - id: missile
+        damage: 40
+        salvo: 1
+        cooldown_s: 2.5
+        range: 20
+        targets: [air]
+        projectile_speed: 12
+
+  - id: tdo_hauler
+    name: Truck
+    faction: tdo
+    domain: ground
+    role: hauler
+    shape: hauler
+    cost: 500
+    per_order: 1
+    build_s: 3
+    hp: 100
+    speed: 1.72
+    sight: 12
+    cargo: 500
+    weapon_slots: 0
+    weapons: []
+
+  - id: tdo_gunship
+    name: Gunship
+    faction: tdo
+    domain: air
+    role: combat
+    shape: air
+    cost: 4000
+    per_order: 1
+    build_s: 7
+    hp: 54
+    speed: 5.78
+    sight: 12
+    weapon_slots: 3
+    weapons:
+      - id: cannon
+        damage: 8
+        damage_troop: 12
+        salvo: 1
+        cooldown_s: 0.5
+        range: 16
+        targets: [air, ground, ship]
+        projectile_speed: 24
+      - id: rocket
+        damage: 30
+        damage_troop: 30
+        salvo: 1
+        cooldown_s: 1.6
+        range: 16
+        targets: [air, ground, ship]
+        projectile_speed: 14
