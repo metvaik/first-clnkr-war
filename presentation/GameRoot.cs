@@ -23,6 +23,7 @@ public partial class GameRoot : Node3D
     private Vector2 _mmbLast;
     private int _lastGroup = -1;
     private ulong _lastGroupMs;
+    private string? _placeTypeId;
 
     public override void _Ready()
     {
@@ -140,6 +141,18 @@ public partial class GameRoot : Node3D
             GetViewport().SetInputAsHandled();
             return;
         }
+        if (key.PhysicalKeycode == _keys.PlaceRefinery)
+        {
+            _placeTypeId = BuildingId("refinery");
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (key.PhysicalKeycode == _keys.PlaceCollector)
+        {
+            _placeTypeId = BuildingId("collector");
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (key.PhysicalKeycode == _keys.Stop)
         {
             Issue(CommandKind.Stop, _selected, Fp.Zero, Fp.Zero, 0);
@@ -212,7 +225,14 @@ public partial class GameRoot : Node3D
             return;
         }
         if (mouse.ButtonIndex == MouseButton.Right && mouse.Pressed)
+        {
+            if (_placeTypeId != null)
+            {
+                _placeTypeId = null;
+                return;
+            }
             IssueOrder(mouse.Position);
+        }
     }
 
     private void FinishSelect(Vector2 end, bool shift)
@@ -222,6 +242,13 @@ public partial class GameRoot : Node3D
             Mathf.Min(_dragStart.Y, end.Y),
             Mathf.Abs(_dragStart.X - end.X),
             Mathf.Abs(_dragStart.Y - end.Y));
+        if (_placeTypeId != null && rect.Size.Length() < 8f)
+        {
+            if (_field.TryGround(end, out var placeX, out var placeY))
+                IssueBuild(_placeTypeId, placeX, placeY);
+            _placeTypeId = null;
+            return;
+        }
         if (!shift)
             _selected.Clear();
         if (rect.Size.Length() < 8f)
@@ -249,6 +276,12 @@ public partial class GameRoot : Node3D
     {
         if (_selected.Count == 0)
             return;
+        var clicked = _field.PickAny(screen, _player);
+        if (clicked != null && clicked.Role == Roles.ComputerCentre && SelectionHas(Roles.Hacker))
+        {
+            Issue(CommandKind.Hack, _selected, Fp.Zero, Fp.Zero, clicked.Id);
+            return;
+        }
         bool attackMove = _keys.IsDown(_keys.AttackMove);
         var enemy = attackMove ? null : _field.PickEntity(screen, _player, enemies: true);
         if (enemy != null)
@@ -261,7 +294,36 @@ public partial class GameRoot : Node3D
         Issue(attackMove ? CommandKind.AttackMove : CommandKind.Move, _selected, x, y, 0);
     }
 
+    private void IssueBuild(string typeId, Fp x, Fp y)
+    {
+        Issue(CommandKind.Build, _selected, x, y, 0, typeId);
+    }
+
+    private string BuildingId(string role)
+    {
+        bool clnkr = _sim.Players[_player].Faction == "clnkr";
+        if (role == "collector")
+            return clnkr ? "clnkr_mine" : "tdo_mine";
+        return clnkr ? "clnkr_refinery" : "tdo_refinery";
+    }
+
+    private bool SelectionHas(string role)
+    {
+        foreach (var id in _selected)
+        {
+            var entity = _sim.Find(id);
+            if (entity != null && entity.Alive && entity.Role == role)
+                return true;
+        }
+        return false;
+    }
+
     private void Issue(CommandKind kind, IEnumerable<int> ids, Fp x, Fp y, int target)
+    {
+        Issue(kind, ids, x, y, target, "");
+    }
+
+    private void Issue(CommandKind kind, IEnumerable<int> ids, Fp x, Fp y, int target, string buildingTypeId)
     {
         var list = new List<int>();
         foreach (var id in ids)
@@ -281,6 +343,7 @@ public partial class GameRoot : Node3D
             X = x,
             Y = y,
             TargetId = target,
+            BuildingTypeId = buildingTypeId,
         });
     }
 
@@ -419,6 +482,10 @@ public partial class GameRoot : Node3D
                 detail = $"{def.Name}   HP {entity.Hp}/{entity.MaxHp}   {entity.Order}";
                 if (entity.Role == Roles.Hauler)
                     detail += $"   {entity.Haul}   cargo {entity.CargoUnits}";
+                if (entity.Work != WorkKind.None && entity.WorkGoal > 0)
+                    detail += $"   {entity.Work} {100 * entity.WorkTicks / entity.WorkGoal}%";
+                if (entity.DistractedUntil > _sim.Tick)
+                    detail += "   scrambled";
             }
         }
         else if (_selected.Count > 1)
@@ -427,11 +494,28 @@ public partial class GameRoot : Node3D
         }
 
         double fps = Engine.GetFramesPerSecond();
+        string place = _placeTypeId == null ? "" : $"Placing {(_data.Units.TryGetValue(_placeTypeId, out var placing) ? placing.Name : _placeTypeId)}. Left click to build, right click to cancel.\n";
+        string sites = "";
+        for (int i = 0; i < _sim.Entities.Count; i++)
+        {
+            var site = _sim.Entities[i];
+            if (!site.Alive || site.Role != Roles.ComputerCentre)
+                continue;
+            if (site.WorkGoal > 0 && site.Work != WorkKind.None)
+                sites += $"{site.Work} {100 * site.WorkTicks / Math.Max(1, site.WorkGoal)}%    ";
+            else if (site.AccessWindow > 0 && site.AccessTicksLeft > 0)
+                sites += $"access {site.AccessTicksLeft} ticks    ";
+        }
+        if (sites.Length > 0)
+            sites = "Hack sites: " + sites + "\n";
         return paused
             + $"TDO credits {tdo.Credits}    C.L.N.K.R. credits {clnkr.Credits}\n"
             + $"Active cap {cap}    Tick {_sim.Tick}    FPS {fps:0}\n"
             + detail + "\n"
+            + sites
+            + place
             + "LMB select / box    RMB move or attack    Z+RMB attack-move    H stop\n"
+            + "N refinery    M collector    RMB Computer Centre with a hacker\n"
             + "Ctrl+0-9 assign group    0-9 recall    Tab switch slot    Space pause\n"
             + "WASD or arrows pan    Q/E rotate    R/F tilt    wheel zoom    MMB pan    Alt+MMB orbit";
     }

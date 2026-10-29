@@ -134,6 +134,23 @@ public static class WorldScale
         return tilesPerSecond.Raw * TileWorldUnits / tickHz;
     }
 
+    /// <summary>
+    /// Whole ticks for a real-time duration. fireRateScale is thousandths
+    /// (750 = 0.75). Weapon cooldowns divide by that scale so 0.75 fires
+    /// three quarters as often. Pass scale 1000 for unscaled durations
+    /// such as build and hack channels.
+    /// </summary>
+    public static int DurationTicks(Fp seconds, int tickHz, Fp scale)
+    {
+        if (tickHz < 1)
+            tickHz = 1;
+        long denom = scale.Raw < 1 ? Fp.Scale : scale.Raw;
+        long ticks = seconds.Raw * tickHz / denom;
+        if (ticks < 1)
+            ticks = 1;
+        return (int)ticks;
+    }
+
     public static int CellOf(Fp world)
     {
         if (world.Raw < 0)

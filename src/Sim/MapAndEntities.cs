@@ -39,6 +39,16 @@ public enum CommandKind : byte
     Move = 2,
     AttackMove = 3,
     Attack = 4,
+    Build = 5,
+    Hack = 6,
+}
+
+public enum WorkKind : byte
+{
+    None = 0,
+    Build = 1,
+    Capture = 2,
+    Infiltrate = 3,
 }
 
 public readonly struct Cell
@@ -270,6 +280,21 @@ public sealed class SimEntity
     public int PayloadFirepower;
     public int ProjectileTargetId;
     public long ProjectileStepRaw;
+    public bool HasExactGoal;
+    public Fp ExactX;
+    public Fp ExactY;
+    public int DistractedUntil;
+    public WorkKind Work;
+    public int WorkTicks;
+    public int WorkGoal;
+    public int AccessTicksLeft;
+    public int AccessWindow;
+    public int AbilityCooldown;
+    public int OperatorId;
+    public string BuildTypeId = "";
+    public int BuildCost;
+    public int BuildOriginX;
+    public int BuildOriginY;
 }
 
 public sealed class SimCommand
@@ -282,4 +307,5 @@ public sealed class SimCommand
     public Fp X;
     public Fp Y;
     public int TargetId;
+    public string BuildingTypeId = "";
 }

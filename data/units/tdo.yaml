@@ -140,3 +140,33 @@ units:
         range: 16
         targets: [air, ground, ship]
         projectile_speed: 14
+
+  - id: tdo_technician
+    name: Technician
+    faction: tdo
+    domain: troop
+    role: constructor
+    shape: capsule
+    cost: 1000
+    per_order: 1
+    build_s: 7
+    hp: 18
+    speed: 1.05
+    sight: 12
+    weapon_slots: 0
+    weapons: []
+
+  - id: tdo_hacker
+    name: Hacker
+    faction: tdo
+    domain: troop
+    role: hacker
+    shape: capsule
+    cost: 2000
+    per_order: 1
+    build_s: 5
+    hp: 18
+    speed: 1.05
+    sight: 12
+    weapon_slots: 0
+    weapons: []

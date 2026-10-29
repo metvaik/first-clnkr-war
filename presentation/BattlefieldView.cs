@@ -18,6 +18,9 @@ public partial class BattlefieldView : Node3D
     private readonly Dictionary<int, StandardMaterial3D> _factionMaterials = new();
     private StandardMaterial3D _tracerMaterial = null!;
     private StandardMaterial3D _hpBack = null!;
+    private StandardMaterial3D _channelMaterial = null!;
+    private float[] _cornerH = Array.Empty<float>();
+    private int _cornerW;
 
     public void Build(Simulation sim, Camera3D camera)
     {
@@ -26,6 +29,8 @@ public partial class BattlefieldView : Node3D
         _ringMaterial = Unshaded(new Color(0.95f, 0.9f, 0.45f, 0.9f));
         _tracerMaterial = Unshaded(new Color(1f, 0.95f, 0.7f));
         _hpBack = Unshaded(new Color(0.02f, 0.02f, 0.02f, 0.85f), billboard: true);
+        _channelMaterial = Unshaded(new Color(0.35f, 0.75f, 1f), billboard: true);
+        BuildCorners(sim.Map);
 
         AddChild(MakeEnvironment());
         AddChild(MakeSun());
@@ -62,13 +67,19 @@ public partial class BattlefieldView : Node3D
 
             float dx = VisualScale.FromRaw(entity.X.Raw) - VisualScale.FromRaw(entity.PrevX.Raw);
             float dz = VisualScale.FromRaw(entity.Y.Raw) - VisualScale.FromRaw(entity.PrevY.Raw);
-            if (dx * dx + dz * dz > 0.000001f)
-                visual.Root.LookAt(visual.Root.GlobalPosition + new Vector3(dx, 0f, dz), Vector3.Up);
+            var facing = new Vector3(dx, 0f, dz);
+            if (facing.LengthSquared() > 0.0004f)
+            {
+                var lookTarget = visual.Root.GlobalPosition + facing;
+                if (!visual.Root.GlobalPosition.IsEqualApprox(lookTarget))
+                    visual.Root.LookAt(lookTarget, Vector3.Up);
+            }
 
             float ratio = entity.MaxHp <= 0 ? 0f : Mathf.Clamp((float)entity.Hp / entity.MaxHp, 0f, 1f);
-            visual.HpFill.Scale = new Vector3(Mathf.Max(0.04f, ratio), 1f, 1f);
+            SetLeftAnchoredBar(visual.HpFill, ratio, visual.BarY);
             visual.HpFill.MaterialOverride = HpColor(ratio);
-            visual.Ring.Visible = selected.Contains(entity.Id);
+            visual.Ring.Visible = selected.Contains(entity.Id) && entity.Kind != EntityKind.Projectile;
+            UpdateChannelBar(visual, entity);
         }
 
         for (int i = 0; i < _drop.Count; i++)
@@ -82,7 +93,17 @@ public partial class BattlefieldView : Node3D
         }
     }
 
+    public SimEntity? PickAny(Vector2 screen, int player)
+    {
+        return PickEntity(screen, player, enemies: false, anyOwner: true);
+    }
+
     public SimEntity? PickEntity(Vector2 screen, int player, bool enemies)
+    {
+        return PickEntity(screen, player, enemies, anyOwner: false);
+    }
+
+    private SimEntity? PickEntity(Vector2 screen, int player, bool enemies, bool anyOwner)
     {
         SimEntity? best = null;
         float bestDist = PickPixels;
@@ -91,9 +112,12 @@ public partial class BattlefieldView : Node3D
             var entity = _sim.Entities[i];
             if (!ShouldDraw(_sim, entity, player) || entity.Kind == EntityKind.Projectile)
                 continue;
-            bool enemy = entity.PlayerId != player;
-            if (enemies != enemy)
-                continue;
+            if (!anyOwner)
+            {
+                bool enemy = entity.PlayerId != player;
+                if (enemies != enemy)
+                    continue;
+            }
             if (!_visuals.TryGetValue(entity.Id, out var visual))
                 continue;
             var point = _camera.UnprojectPosition(visual.Root.GlobalPosition);
@@ -233,7 +257,7 @@ public partial class BattlefieldView : Node3D
         }
         else
         {
-            bar = AddShape(root, entity.Shape, color);
+            bar = AddShape(root, entity.Shape, color, entity.Footprint);
         }
 
         var ring = new MeshInstance3D
@@ -257,6 +281,20 @@ public partial class BattlefieldView : Node3D
             MaterialOverride = HpColor(1f),
             Position = new Vector3(0f, bar + 0.001f, 0f),
         };
+        var channelBack = new MeshInstance3D
+        {
+            Mesh = new QuadMesh { Size = new Vector2(1.2f, 0.08f) },
+            MaterialOverride = _hpBack,
+            Position = new Vector3(0f, bar + 0.22f, 0f),
+            Visible = false,
+        };
+        var channelFill = new MeshInstance3D
+        {
+            Mesh = new QuadMesh { Size = new Vector2(1.2f, 0.06f) },
+            MaterialOverride = _channelMaterial,
+            Position = new Vector3(0f, bar + 0.22f, 0.02f),
+            Visible = false,
+        };
         if (entity.Kind == EntityKind.Projectile)
         {
             hpBack.Visible = false;
@@ -265,10 +303,12 @@ public partial class BattlefieldView : Node3D
         }
         root.AddChild(hpBack);
         root.AddChild(hpFill);
-        return new UnitVisual(root, hpFill, ring);
+        root.AddChild(channelBack);
+        root.AddChild(channelFill);
+        return new UnitVisual(root, hpFill, ring, channelFill, channelBack, bar + 0.001f);
     }
 
-    private float AddShape(Node3D root, string shape, Color color)
+    private float AddShape(Node3D root, string shape, Color color, int footprint)
     {
         var body = FactionMaterial(color);
         var dark = FactionMaterial(color.Darkened(0.25f));
@@ -304,9 +344,10 @@ public partial class BattlefieldView : Node3D
                 AddBox(root, new Vector3(0.55f, 0.12f, 0.12f), dark, new Vector3(0f, 1.1f, 0f));
                 return 1.9f;
             case "building":
-                AddBox(root, new Vector3(2.4f, 1.3f, 2.4f), body, new Vector3(0f, 0.65f, 0f));
-                AddBox(root, new Vector3(0.8f, 0.45f, 0.8f), dark, new Vector3(0f, 1.45f, 0f));
-                return 2.3f;
+                float span = Math.Max(1, footprint) * VisualScale.Tile * 0.98f;
+                AddBox(root, new Vector3(span, 1.1f, span), body, new Vector3(0f, 0.55f, 0f));
+                AddBox(root, new Vector3(span * 0.28f, 0.4f, span * 0.28f), dark, new Vector3(0f, 1.25f, 0f));
+                return 1.7f + span * 0.05f;
             default:
                 AddBox(root, new Vector3(0.9f, 0.55f, 1.3f), body, new Vector3(0f, 0.35f, 0f));
                 return 1.4f;
@@ -350,25 +391,36 @@ public partial class BattlefieldView : Node3D
 
     private Node3D MakeTerrain(SimMap map)
     {
+        int vw = map.Width + 1;
+        var colors = new Color[vw * (map.Height + 1)];
+        for (int y = 0; y <= map.Height; y++)
+        {
+            for (int x = 0; x <= map.Width; x++)
+                colors[y * vw + x] = CornerColor(map, x, y);
+        }
+
         var tool = new SurfaceTool();
         tool.Begin(Mesh.PrimitiveType.Triangles);
+        for (int y = 0; y <= map.Height; y++)
+        {
+            for (int x = 0; x <= map.Width; x++)
+            {
+                int i = y * vw + x;
+                tool.SetColor(colors[i]);
+                tool.AddVertex(new Vector3(x * VisualScale.Tile, _cornerH[i], y * VisualScale.Tile));
+            }
+        }
         for (int y = 0; y < map.Height; y++)
         {
             for (int x = 0; x < map.Width; x++)
             {
-                int i = map.Index(x, y);
-                float h = VisualScale.Height(map.Heights[i]);
-                var color = TerrainColor(map.Terrain[i], map.Tint[i]);
-                float x0 = x * VisualScale.Tile;
-                float z0 = y * VisualScale.Tile;
-                float x1 = x0 + VisualScale.Tile;
-                float z1 = z0 + VisualScale.Tile;
-                AddTerrainVertex(tool, new Vector3(x0, h, z0), color);
-                AddTerrainVertex(tool, new Vector3(x1, h, z0), color);
-                AddTerrainVertex(tool, new Vector3(x1, h, z1), color);
-                AddTerrainVertex(tool, new Vector3(x0, h, z0), color);
-                AddTerrainVertex(tool, new Vector3(x1, h, z1), color);
-                AddTerrainVertex(tool, new Vector3(x0, h, z1), color);
+                int i00 = y * vw + x;
+                tool.AddIndex(i00);
+                tool.AddIndex(i00 + 1);
+                tool.AddIndex(i00 + vw + 1);
+                tool.AddIndex(i00);
+                tool.AddIndex(i00 + vw + 1);
+                tool.AddIndex(i00 + vw);
             }
         }
         tool.GenerateNormals();
@@ -390,10 +442,57 @@ public partial class BattlefieldView : Node3D
         return root;
     }
 
-    private static void AddTerrainVertex(SurfaceTool tool, Vector3 position, Color color)
+    private void BuildCorners(SimMap map)
     {
-        tool.SetColor(color);
-        tool.AddVertex(position);
+        _cornerW = map.Width + 1;
+        int vh = map.Height + 1;
+        _cornerH = new float[_cornerW * vh];
+        for (int y = 0; y < vh; y++)
+        {
+            for (int x = 0; x < _cornerW; x++)
+            {
+                float sum = 0f;
+                int n = 0;
+                AccHeight(map, x - 1, y - 1, ref sum, ref n);
+                AccHeight(map, x, y - 1, ref sum, ref n);
+                AccHeight(map, x - 1, y, ref sum, ref n);
+                AccHeight(map, x, y, ref sum, ref n);
+                _cornerH[y * _cornerW + x] = n == 0 ? 0f : sum / n;
+            }
+        }
+    }
+
+    private static void AccHeight(SimMap map, int x, int y, ref float sum, ref int n)
+    {
+        if (!map.InBounds(x, y))
+            return;
+        sum += VisualScale.Height(map.Heights[map.Index(x, y)]);
+        n++;
+    }
+
+    private Color CornerColor(SimMap map, int x, int y)
+    {
+        float r = 0f, g = 0f, b = 0f;
+        int n = 0;
+        AccColor(map, x - 1, y - 1, ref r, ref g, ref b, ref n);
+        AccColor(map, x, y - 1, ref r, ref g, ref b, ref n);
+        AccColor(map, x - 1, y, ref r, ref g, ref b, ref n);
+        AccColor(map, x, y, ref r, ref g, ref b, ref n);
+        if (n == 0)
+            return new Color(0.3f, 0.4f, 0.25f);
+        return new Color(r / n, g / n, b / n);
+    }
+
+    private static void AccColor(SimMap map, int x, int y, ref float r, ref float g, ref float b, ref int n)
+    {
+        if (!map.InBounds(x, y))
+            return;
+        int i = map.Index(x, y);
+        var color = TerrainColor(map.Terrain[i], map.Tint[i]);
+        r += color.R;
+        g += color.G;
+        b += color.B;
+        n++;
     }
 
     private static Color TerrainColor(TerrainKind terrain, byte tint)
@@ -430,7 +529,7 @@ public partial class BattlefieldView : Node3D
             for (int x = 0; x < map.Width; x++)
             {
                 int i = map.Index(x, y);
-                float h = VisualScale.Height(map.Heights[i]) + 0.18f;
+                float h = CornerMax(x, y) + 0.2f;
                 var xf = new Transform3D(Basis.Identity, new Vector3(VisualScale.CellX(x), h, VisualScale.CellX(y)));
                 _fog.SetInstanceTransform(i, xf);
                 _fog.SetInstanceColor(i, new Color(0f, 0f, 0f, 0.94f));
@@ -455,9 +554,55 @@ public partial class BattlefieldView : Node3D
 
     private float GroundHeight(SimMap map, float visualX, float visualZ)
     {
-        int x = Mathf.Clamp((int)(visualX / VisualScale.Tile), 0, map.Width - 1);
-        int y = Mathf.Clamp((int)(visualZ / VisualScale.Tile), 0, map.Height - 1);
-        return VisualScale.Height(map.Heights[map.Index(x, y)]);
+        if (_cornerH.Length == 0)
+            return 0f;
+        float gx = visualX / VisualScale.Tile;
+        float gz = visualZ / VisualScale.Tile;
+        int x0 = Mathf.Clamp((int)Mathf.Floor(gx), 0, map.Width - 1);
+        int z0 = Mathf.Clamp((int)Mathf.Floor(gz), 0, map.Height - 1);
+        float tx = Mathf.Clamp(gx - x0, 0f, 1f);
+        float tz = Mathf.Clamp(gz - z0, 0f, 1f);
+        float h00 = _cornerH[z0 * _cornerW + x0];
+        float h10 = _cornerH[z0 * _cornerW + x0 + 1];
+        float h01 = _cornerH[(z0 + 1) * _cornerW + x0];
+        float h11 = _cornerH[(z0 + 1) * _cornerW + x0 + 1];
+        float hx0 = Mathf.Lerp(h00, h10, tx);
+        float hx1 = Mathf.Lerp(h01, h11, tx);
+        return Mathf.Lerp(hx0, hx1, tz);
+    }
+
+    private float CornerMax(int cellX, int cellY)
+    {
+        float max = 0f;
+        for (int y = cellY; y <= cellY + 1; y++)
+        {
+            for (int x = cellX; x <= cellX + 1; x++)
+            {
+                int i = y * _cornerW + x;
+                if ((uint)i < (uint)_cornerH.Length)
+                    max = Mathf.Max(max, _cornerH[i]);
+            }
+        }
+        return max;
+    }
+
+    private static void SetLeftAnchoredBar(MeshInstance3D fill, float ratio, float y)
+    {
+        ratio = Mathf.Clamp(ratio, 0.001f, 1f);
+        fill.Scale = new Vector3(ratio, 1f, 1f);
+        fill.Position = new Vector3(-0.6f * (1f - ratio), y, fill.Position.Z);
+    }
+
+    private void UpdateChannelBar(UnitVisual visual, SimEntity entity)
+    {
+        bool capture = entity.WorkGoal > 0 && entity.Work != WorkKind.None;
+        bool access = entity.AccessWindow > 0 && entity.AccessTicksLeft > 0;
+        visual.ChannelBack.Visible = capture || access;
+        visual.ChannelFill.Visible = capture || access;
+        if (capture)
+            SetLeftAnchoredBar(visual.ChannelFill, (float)entity.WorkTicks / entity.WorkGoal, visual.BarY + 0.22f);
+        else if (access)
+            SetLeftAnchoredBar(visual.ChannelFill, (float)entity.AccessTicksLeft / entity.AccessWindow, visual.BarY + 0.22f);
     }
 
     private Color FactionColor(Simulation sim, int player)
@@ -517,12 +662,18 @@ public partial class BattlefieldView : Node3D
         public readonly Node3D Root;
         public readonly MeshInstance3D HpFill;
         public readonly MeshInstance3D Ring;
+        public readonly MeshInstance3D ChannelFill;
+        public readonly MeshInstance3D ChannelBack;
+        public readonly float BarY;
 
-        public UnitVisual(Node3D root, MeshInstance3D hpFill, MeshInstance3D ring)
+        public UnitVisual(Node3D root, MeshInstance3D hpFill, MeshInstance3D ring, MeshInstance3D channelFill, MeshInstance3D channelBack, float barY)
         {
             Root = root;
             HpFill = hpFill;
             Ring = ring;
+            ChannelFill = channelFill;
+            ChannelBack = channelBack;
+            BarY = barY;
         }
     }
 }

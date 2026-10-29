@@ -138,3 +138,33 @@ units:
         range: 16
         targets: [air, ground, ship]
         projectile_speed: 14
+
+  - id: clnkr_constructobot
+    name: Constructobot
+    faction: clnkr
+    domain: troop
+    role: constructor
+    shape: capsule
+    cost: 1100
+    per_order: 1
+    build_s: 7
+    hp: 14
+    speed: 0.86
+    sight: 12
+    weapon_slots: 0
+    weapons: []
+
+  - id: clnkr_agent
+    name: Agent
+    faction: clnkr
+    domain: troop
+    role: hacker
+    shape: capsule
+    cost: 2000
+    per_order: 1
+    build_s: 5
+    hp: 18
+    speed: 1.05
+    sight: 12
+    weapon_slots: 0
+    weapons: []

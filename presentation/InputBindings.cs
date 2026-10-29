@@ -21,6 +21,8 @@ public sealed class InputBindings
     public Key SwitchPlayer { get; set; } = Key.Tab;
     public Key Pause { get; set; } = Key.Space;
     public Key FocusBase { get; set; } = Key.Home;
+    public Key PlaceRefinery { get; set; } = Key.N;
+    public Key PlaceCollector { get; set; } = Key.M;
 
     public bool EdgeScroll { get; set; } = true;
     public float PanSpeed { get; set; } = 40f;
@@ -58,6 +60,8 @@ public sealed class InputBindings
         bindings.SwitchPlayer = KeyOf(map, "switch_player", bindings.SwitchPlayer);
         bindings.Pause = KeyOf(map, "pause", bindings.Pause);
         bindings.FocusBase = KeyOf(map, "focus_base", bindings.FocusBase);
+        bindings.PlaceRefinery = KeyOf(map, "place_refinery", bindings.PlaceRefinery);
+        bindings.PlaceCollector = KeyOf(map, "place_collector", bindings.PlaceCollector);
 
         bindings.EdgeScroll = BoolOf(map, "edge_scroll", bindings.EdgeScroll);
         bindings.PanSpeed = FloatOf(map, "pan_speed", bindings.PanSpeed);

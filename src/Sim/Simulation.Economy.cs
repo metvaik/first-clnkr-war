@@ -52,7 +52,7 @@ public sealed partial class Simulation
 
         if (hauler.Haul is HaulPhase.Loading)
         {
-            if (!_byId.TryGetValue(hauler.LinkId, out var site) || !site.Alive || !NearBuilding(hauler, site))
+            if (!_byId.TryGetValue(hauler.LinkId, out var site) || !site.Alive || !StillDocked(hauler, site))
             {
                 hauler.Haul = HaulPhase.Auto;
             }
@@ -88,7 +88,7 @@ public sealed partial class Simulation
 
         if (hauler.Haul is HaulPhase.Unloading)
         {
-            if (!_byId.TryGetValue(hauler.HomeId, out var home) || !home.Alive || !NearBuilding(hauler, home))
+            if (!_byId.TryGetValue(hauler.HomeId, out var home) || !home.Alive || !StillDocked(hauler, home))
             {
                 hauler.Haul = HaulPhase.ToRefinery;
             }
@@ -151,7 +151,10 @@ public sealed partial class Simulation
     private void GoToBuilding(SimEntity hauler, SimEntity building, HaulPhase phase)
     {
         HaulPhase arrive = phase == HaulPhase.ToSite ? HaulPhase.Loading : HaulPhase.Unloading;
-        if (NearBuilding(hauler, building))
+        if (!TryDock(building.CellX, building.CellY, building.Footprint, hauler, out int ax, out int ay, out Fp dockX, out Fp dockY))
+            return;
+        long dockRadius = hauler.Haul == arrive ? DockContinueRaw : DockArriveRaw;
+        if (CloseTo(hauler, dockX, dockY, dockRadius))
         {
             if (hauler.Haul != arrive)
             {
@@ -165,6 +168,7 @@ public sealed partial class Simulation
             hauler.PathToken++;
             hauler.GoalCellX = -1;
             hauler.GoalCellY = -1;
+            hauler.HasExactGoal = false;
             return;
         }
 
@@ -174,9 +178,7 @@ public sealed partial class Simulation
             hauler.RateAcc = 0;
         }
 
-        if (!TryAdjacent(building, hauler, out int ax, out int ay))
-            return;
-        RequestPath(hauler, ax, ay);
+        RequestPath(hauler, ax, ay, true, dockX, dockY);
     }
 
     private SimEntity? ResolveHome(SimEntity hauler)
@@ -235,41 +237,86 @@ public sealed partial class Simulation
         return 1;
     }
 
-    private static bool NearBuilding(SimEntity unit, SimEntity building)
+    private const long DockStandOffRaw = 160L * Fp.Scale;
+    // Tight radius so economy does not cancel the approach while the hauler
+    // is still a large fraction of a tile away from the dock point.
+    private const long DockArriveRaw = 48L * Fp.Scale;
+    private const long DockContinueRaw = 96L * Fp.Scale;
+
+    private static bool CloseTo(SimEntity unit, Fp x, Fp y, long radiusRaw)
     {
-        int minX = building.CellX - 1;
-        int maxX = building.CellX + building.Footprint;
-        int minY = building.CellY - 1;
-        int maxY = building.CellY + building.Footprint;
-        return unit.CellX >= minX && unit.CellX <= maxX && unit.CellY >= minY && unit.CellY <= maxY;
+        long dx = unit.X.Raw - x.Raw;
+        long dy = unit.Y.Raw - y.Raw;
+        return dx * dx + dy * dy <= radiusRaw * radiusRaw;
     }
 
-    private bool TryAdjacent(SimEntity building, SimEntity unit, out int ax, out int ay)
+    private bool StillDocked(SimEntity unit, SimEntity building)
+    {
+        return TryDock(building.CellX, building.CellY, building.Footprint, unit, out _, out _, out Fp dockX, out Fp dockY)
+            && CloseTo(unit, dockX, dockY, DockContinueRaw);
+    }
+
+    private bool TryDock(int originX, int originY, int footprint, SimEntity unit, out int cellX, out int cellY, out Fp pointX, out Fp pointY)
     {
         bool found = false;
-        int best = int.MaxValue;
-        ax = building.CellX;
-        ay = building.CellY;
-        int f = building.Footprint;
-        for (int y = building.CellY - 1; y <= building.CellY + f; y++)
+        long best = long.MaxValue;
+        int bestX = originX;
+        int bestY = originY;
+        Fp bestPx = Fp.Zero;
+        Fp bestPy = Fp.Zero;
+        int f = Math.Max(1, footprint);
+        for (int i = 0; i < f; i++)
         {
-            for (int x = building.CellX - 1; x <= building.CellX + f; x++)
-            {
-                bool inside = x >= building.CellX && x < building.CellX + f && y >= building.CellY && y < building.CellY + f;
-                if (inside || !Map.Walkable(x, y, unit.Domain))
-                    continue;
-                int dx = x - unit.CellX;
-                int dy = y - unit.CellY;
-                int d = dx * dx + dy * dy;
-                if (!found || d < best || (d == best && (y < ay || (y == ay && x < ax))))
-                {
-                    found = true;
-                    best = d;
-                    ax = x;
-                    ay = y;
-                }
-            }
+            Consider(originX - 1, originY + i, -1, 0);
+            Consider(originX + f, originY + i, 1, 0);
+            Consider(originX + i, originY - 1, 0, -1);
+            Consider(originX + i, originY + f, 0, 1);
         }
+
+        cellX = bestX;
+        cellY = bestY;
+        pointX = bestPx;
+        pointY = bestPy;
         return found;
+
+        void Consider(int x, int y, int nx, int ny)
+        {
+            if (!Map.Walkable(x, y, unit.Domain))
+                return;
+            long edgeX;
+            long edgeY;
+            if (nx < 0)
+            {
+                edgeX = (long)originX * WorldScale.TileWorldUnits * Fp.Scale - DockStandOffRaw;
+                edgeY = WorldScale.CellCenter(y).Raw;
+            }
+            else if (nx > 0)
+            {
+                edgeX = (long)(originX + f) * WorldScale.TileWorldUnits * Fp.Scale + DockStandOffRaw;
+                edgeY = WorldScale.CellCenter(y).Raw;
+            }
+            else if (ny < 0)
+            {
+                edgeY = (long)originY * WorldScale.TileWorldUnits * Fp.Scale - DockStandOffRaw;
+                edgeX = WorldScale.CellCenter(x).Raw;
+            }
+            else
+            {
+                edgeY = (long)(originY + f) * WorldScale.TileWorldUnits * Fp.Scale + DockStandOffRaw;
+                edgeX = WorldScale.CellCenter(x).Raw;
+            }
+
+            long dx = edgeX - unit.X.Raw;
+            long dy = edgeY - unit.Y.Raw;
+            long score = dx * dx + dy * dy;
+            if (found && (score > best || score == best && (y > bestY || y == bestY && x >= bestX)))
+                return;
+            found = true;
+            best = score;
+            bestX = x;
+            bestY = y;
+            bestPx = new Fp(edgeX);
+            bestPy = new Fp(edgeY);
+        }
     }
 }

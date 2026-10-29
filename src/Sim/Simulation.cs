@@ -152,6 +152,7 @@ public sealed partial class Simulation
         ProcessPathQueue();
         TickMovement();
         Separate();
+        TickSpecial();
         if (Tick % Data.Rules.FogUpdateIntervalTicks == 0)
             UpdateFog();
         TickProjectiles();
@@ -254,6 +255,10 @@ public sealed partial class Simulation
             hash.Add(e.TargetId);
             hash.Add(e.CellX);
             hash.Add(e.CellY);
+            hash.Add((int)e.Work);
+            hash.Add(e.WorkTicks);
+            hash.Add(e.DistractedUntil);
+            hash.Add(e.AccessTicksLeft);
         }
 
         for (int p = 0; p < Fog.Length; p++)
@@ -291,44 +296,36 @@ public sealed partial class Simulation
     {
         if ((uint)command.PlayerId >= (uint)Players.Length)
             return;
+        if (command.Kind is CommandKind.Move or CommandKind.AttackMove)
+        {
+            OrderGroupMove(command);
+            return;
+        }
+
+        bool buildStarted = false;
         for (int i = 0; i < command.UnitIds.Length; i++)
         {
             if (!_byId.TryGetValue(command.UnitIds[i], out var entity))
                 continue;
             if (!entity.Alive || entity.PlayerId != command.PlayerId || entity.Kind != EntityKind.Unit)
                 continue;
+            if (entity.DistractedUntil > Tick)
+                continue;
 
             switch (command.Kind)
             {
                 case CommandKind.Stop:
+                    CancelWork(entity);
                     entity.Order = OrderKind.Idle;
                     entity.TargetId = 0;
-                    entity.Path.Clear();
-                    entity.Waypoint = 0;
-                    entity.PathPending = false;
-                    entity.PathToken++;
-                    entity.GoalCellX = -1;
-                    entity.GoalCellY = -1;
+                    ClearPath(entity);
                     if (entity.Role == Roles.Hauler)
                         entity.Haul = HaulPhase.Auto;
-                    break;
-                case CommandKind.Move:
-                    entity.Order = OrderKind.Move;
-                    entity.TargetId = 0;
-                    if (entity.Role == Roles.Hauler)
-                        entity.Haul = HaulPhase.Manual;
-                    RequestPath(entity, WorldScale.CellOf(command.X), WorldScale.CellOf(command.Y));
-                    break;
-                case CommandKind.AttackMove:
-                    entity.Order = OrderKind.AttackMove;
-                    entity.TargetId = 0;
-                    if (entity.Role == Roles.Hauler)
-                        entity.Haul = HaulPhase.Manual;
-                    RequestPath(entity, WorldScale.CellOf(command.X), WorldScale.CellOf(command.Y));
                     break;
                 case CommandKind.Attack:
                     if (!_byId.TryGetValue(command.TargetId, out var target) || !target.Alive || target.PlayerId == entity.PlayerId)
                         break;
+                    CancelWork(entity);
                     if (Def(entity).Weapons.Count == 0)
                     {
                         entity.Order = OrderKind.Move;
@@ -343,8 +340,97 @@ public sealed partial class Simulation
                     if (entity.Role == Roles.Hauler)
                         entity.Haul = HaulPhase.Manual;
                     break;
+                case CommandKind.Build:
+                    if (buildStarted || entity.Role != Roles.Constructor)
+                        break;
+                    CancelWork(entity);
+                    buildStarted = TryBeginBuild(entity, command);
+                    break;
+                case CommandKind.Hack:
+                    if (entity.Role != Roles.Hacker)
+                        break;
+                    CancelWork(entity);
+                    TryBeginHack(entity, command);
+                    break;
             }
         }
+    }
+
+    private void OrderGroupMove(SimCommand command)
+    {
+        var units = new List<SimEntity>();
+        for (int i = 0; i < command.UnitIds.Length; i++)
+        {
+            if (!_byId.TryGetValue(command.UnitIds[i], out var entity))
+                continue;
+            if (!entity.Alive || entity.PlayerId != command.PlayerId || entity.Kind != EntityKind.Unit)
+                continue;
+            if (entity.DistractedUntil > Tick)
+                continue;
+            CancelWork(entity);
+            units.Add(entity);
+        }
+        if (units.Count == 0)
+            return;
+
+        int originX = WorldScale.CellOf(command.X);
+        int originY = WorldScale.CellOf(command.Y);
+        int cols = (int)Math.Ceiling(Math.Sqrt(units.Count));
+        if (cols < 1)
+            cols = 1;
+        var order = command.Kind == CommandKind.AttackMove ? OrderKind.AttackMove : OrderKind.Move;
+        for (int i = 0; i < units.Count; i++)
+        {
+            var unit = units[i];
+            int col = i % cols;
+            int row = i / cols;
+            int dx = col - (cols - 1) / 2;
+            int dy = row - (cols - 1) / 2;
+            unit.Order = order;
+            unit.TargetId = 0;
+            if (unit.Role == Roles.Hauler)
+                unit.Haul = HaulPhase.Manual;
+            if (!FindFormationCell(unit, originX + dx, originY + dy, out int gx, out int gy))
+                continue;
+            RequestPath(unit, gx, gy);
+        }
+    }
+
+    private bool FindFormationCell(SimEntity unit, int ox, int oy, out int gx, out int gy)
+    {
+        for (int radius = 0; radius < 8; radius++)
+        {
+            for (int y = -radius; y <= radius; y++)
+            {
+                for (int x = -radius; x <= radius; x++)
+                {
+                    if (radius != 0 && Math.Max(Math.Abs(x), Math.Abs(y)) != radius)
+                        continue;
+                    int cx = ox + x;
+                    int cy = oy + y;
+                    if (!Map.Walkable(cx, cy, unit.Domain))
+                        continue;
+                    gx = cx;
+                    gy = cy;
+                    return true;
+                }
+            }
+        }
+
+        gx = ox;
+        gy = oy;
+        return false;
+    }
+
+    private void ClearPath(SimEntity entity)
+    {
+        entity.Path.Clear();
+        entity.Waypoint = 0;
+        entity.PathPending = false;
+        entity.PathToken++;
+        entity.GoalCellX = -1;
+        entity.GoalCellY = -1;
+        entity.HasExactGoal = false;
     }
 
     private void PlaceOnFootprint(SimEntity entity, int cellX, int cellY, int footprint)
@@ -462,10 +548,12 @@ public sealed partial class Simulation
 
     private int SecondsToTicks(Fp seconds)
     {
-        long ticks = seconds.Raw * Data.Rules.TickHz / Fp.Scale;
-        if (ticks < 1)
-            ticks = 1;
-        return (int)ticks;
+        return WorldScale.DurationTicks(seconds, Data.Rules.TickHz, Fp.FromInt(1));
+    }
+
+    private int WeaponTicks(Fp seconds)
+    {
+        return WorldScale.DurationTicks(seconds, Data.Rules.TickHz, Data.Rules.FireRateScale);
     }
 
     private long BoostedSpeedRaw(UnitDef def, int playerId)
@@ -474,6 +562,8 @@ public sealed partial class Simulation
         if ((uint)playerId < (uint)Players.Length)
             level = Math.Clamp(Players[playerId].SpeedLevel, -3, 3);
         long speed = def.Speed.Raw * (5 + level) / 5;
+        long scale = Data.Rules.SpeedScale.Raw < 1 ? Fp.Scale : Data.Rules.SpeedScale.Raw;
+        speed = speed * scale / Fp.Scale;
         return WorldScale.WorldPerTickRaw(new Fp(speed), Data.Rules.TickHz);
     }
 

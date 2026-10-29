@@ -4,6 +4,11 @@ public sealed partial class Simulation
 {
     private void RequestPath(SimEntity entity, int gx, int gy)
     {
+        RequestPath(entity, gx, gy, false, Fp.Zero, Fp.Zero);
+    }
+
+    private void RequestPath(SimEntity entity, int gx, int gy, bool exact, Fp exactX, Fp exactY)
+    {
         if (!Map.InBounds(entity.CellX, entity.CellY))
             return;
         if (gx < 0)
@@ -15,13 +20,21 @@ public sealed partial class Simulation
         if (gy >= Map.Height)
             gy = Map.Height - 1;
 
-        if (entity.PathPending && entity.GoalCellX == gx && entity.GoalCellY == gy)
+        bool sameExact = !exact && !entity.HasExactGoal
+            || exact && entity.HasExactGoal && entity.ExactX.Raw == exactX.Raw && entity.ExactY.Raw == exactY.Raw;
+        if (sameExact && entity.PathPending && entity.GoalCellX == gx && entity.GoalCellY == gy)
             return;
-        if (!entity.PathPending && entity.GoalCellX == gx && entity.GoalCellY == gy && entity.Waypoint < entity.Path.Count)
+        if (sameExact && !entity.PathPending && entity.GoalCellX == gx && entity.GoalCellY == gy && entity.Waypoint < entity.Path.Count)
             return;
 
         entity.GoalCellX = gx;
         entity.GoalCellY = gy;
+        entity.HasExactGoal = exact;
+        if (exact)
+        {
+            entity.ExactX = exactX;
+            entity.ExactY = exactY;
+        }
         entity.PathToken++;
         entity.PathPending = true;
         entity.Path.Clear();
@@ -74,21 +87,35 @@ public sealed partial class Simulation
             var entity = _entities[i];
             if (!entity.Alive || entity.Kind != EntityKind.Unit)
                 continue;
-            if (entity.PathPending || entity.Waypoint >= entity.Path.Count)
+            if (entity.PathPending)
                 continue;
             if (entity.Order == OrderKind.Attack && _byId.TryGetValue(entity.TargetId, out var chase) && chase.Alive && InAnyWeaponRange(entity, chase))
                 continue;
             if (entity.Order == OrderKind.AttackMove && _byId.TryGetValue(entity.TargetId, out var engaged) && engaged.Alive && InAnyWeaponRange(entity, engaged))
                 continue;
 
-            var def = Def(entity);
-            long step = BoostedSpeedRaw(def, entity.PlayerId);
-            if (step < 0)
-                step = 0;
+            SkipOccupiedWaypoints(entity);
+            if (entity.Waypoint >= entity.Path.Count)
+                continue;
 
             var cell = entity.Path[entity.Waypoint];
-            Fp tx = WorldScale.CellCenter(cell.X);
-            Fp ty = WorldScale.CellCenter(cell.Y);
+            bool last = entity.Waypoint == entity.Path.Count - 1;
+            Fp tx;
+            Fp ty;
+            if (last && entity.HasExactGoal)
+            {
+                tx = entity.ExactX;
+                ty = entity.ExactY;
+            }
+            else
+            {
+                tx = WorldScale.CellCenter(cell.X);
+                ty = WorldScale.CellCenter(cell.Y);
+            }
+
+            long step = BoostedSpeedRaw(Def(entity), entity.PlayerId);
+            if (step < 0)
+                step = 0;
             long dx = tx.Raw - entity.X.Raw;
             long dy = ty.Raw - entity.Y.Raw;
             long dist2 = dx * dx + dy * dy;
@@ -97,15 +124,10 @@ public sealed partial class Simulation
                 entity.X = tx;
                 entity.Y = ty;
                 entity.Waypoint++;
+                ClampToMap(entity);
+                SyncCell(entity);
                 if (entity.Waypoint >= entity.Path.Count)
-                {
-                    entity.Path.Clear();
-                    entity.Waypoint = 0;
-                    entity.GoalCellX = -1;
-                    entity.GoalCellY = -1;
-                    if (entity.Order is OrderKind.Move or OrderKind.AttackMove)
-                        entity.Order = OrderKind.Idle;
-                }
+                    Arrive(entity);
             }
             else
             {
@@ -114,11 +136,43 @@ public sealed partial class Simulation
                     dist = 1;
                 entity.X = new Fp(entity.X.Raw + dx * step / dist);
                 entity.Y = new Fp(entity.Y.Raw + dy * step / dist);
+                ClampToMap(entity);
+                SyncCell(entity);
             }
-
-            ClampToMap(entity);
-            SyncCell(entity);
         }
+    }
+
+    /// <summary>
+    /// A cell the unit is already standing in is done. Requiring the exact
+    /// centre let separation hold a pair just outside one step of that centre,
+    /// so waypoint 0 never advanced and later orders looked ignored.
+    /// </summary>
+    private void SkipOccupiedWaypoints(SimEntity entity)
+    {
+        while (entity.Waypoint < entity.Path.Count)
+        {
+            bool last = entity.Waypoint == entity.Path.Count - 1;
+            if (last && entity.HasExactGoal)
+                break;
+            var cell = entity.Path[entity.Waypoint];
+            if (entity.CellX != cell.X || entity.CellY != cell.Y)
+                break;
+            entity.Waypoint++;
+        }
+        if (entity.Waypoint >= entity.Path.Count && entity.Path.Count > 0)
+            Arrive(entity);
+    }
+
+    private void Arrive(SimEntity entity)
+    {
+        entity.Path.Clear();
+        entity.Waypoint = 0;
+        entity.GoalCellX = -1;
+        entity.GoalCellY = -1;
+        entity.PathPending = false;
+        entity.HasExactGoal = false;
+        if (entity.Order is OrderKind.Move or OrderKind.AttackMove && entity.DistractedUntil <= Tick)
+            entity.Order = OrderKind.Idle;
     }
 
     private void Separate()

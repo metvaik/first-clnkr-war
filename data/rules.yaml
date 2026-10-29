@@ -5,6 +5,10 @@
 
 sim:
   tick_hz: 20
+  # Global pace. 1.0 is the design-table speed. Rendered tiles match the sim
+  # (1 small tile = 512 world units = 2 on-screen units), so the tables already
+  # crossed the map at their listed tiles/second. 0.5 is the playtest cut.
+  speed_scale: 0.5
 
 limits:
   sight_max_tiles: 20
@@ -18,6 +22,22 @@ combat:
   # Staggered target searches and fog refreshes (every N sim ticks).
   target_search_interval_ticks: 8
   fog_update_interval_ticks: 6
+  # 0.75 fires three quarters as often: cooldowns and salvo gaps are / 0.75.
+  fire_rate_scale: 0.75
+
+construction:
+  # Building costs and HP are in the design tables. Structure build seconds are not,
+  # so this is a prototype placeholder used when a building omits build_s.
+  default_build_s: 20
+
+hacking:
+  capture_s: 20
+  infiltrate_s: 15
+  access_window_s: 45
+  ability_cooldown_s: 20
+  scramble_min_tiles: 5
+  scramble_max_tiles: 8
+  scramble_s: 3
 
 movement:
   # Soft separation radius so whitebox bodies do not occupy one point.

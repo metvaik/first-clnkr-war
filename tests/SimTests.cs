@@ -170,6 +170,8 @@ public class SimulationTests
         Assert.Equal(12000, data.Require("tdo_hauler").Sight.Raw);
         Assert.Equal(500, data.Require("tdo_hauler").Cargo);
         Expect(data, "tdo_gunship", 4000, 54, "5.78", "16", 8, 1);
+        Expect(data, "tdo_technician", 1000, 18, "1.05", null, 0, 1);
+        Expect(data, "tdo_hacker", 2000, 18, "1.05", null, 0, 1);
         Assert.Equal(30, data.Require("tdo_gunship").Weapons[1].Damage);
 
         Expect(data, "clnkr_warhorse", 1000, 140, "2.15", null, 0, 1);
@@ -180,6 +182,8 @@ public class SimulationTests
         Assert.Equal(9, data.Require("clnkr_assault_laser").Weapons[1].Damage);
         Expect(data, "clnkr_hauler", 500, 100, "1.72", null, 0, 1);
         Expect(data, "clnkr_bird", 3500, 68, "4.30", "16", 12, 1);
+        Expect(data, "clnkr_constructobot", 1100, 14, "0.86", null, 0, 1);
+        Expect(data, "clnkr_agent", 2000, 18, "1.05", null, 0, 1);
 
         Assert.Equal(1000, data.Require("tdo_refinery").Cost);
         Assert.Equal(1000, data.Require("tdo_refinery").Hp);
@@ -267,11 +271,166 @@ public class SimulationTests
     }
 
     [Fact]
+    public void GroupMoveSpreadsAndAcceptsASecondOrder()
+    {
+        var data = Load();
+        var sim = new Simulation(data, SimMap.Blank(64, 64), 1);
+        sim.Players[0].Faction = "tdo";
+        var units = new List<SimEntity>();
+        for (int i = 0; i < 4; i++)
+            units.Add(sim.SpawnUnit("tdo_jeep", 0, 8 + i, 8));
+
+        void Order(int cellX, int cellY)
+        {
+            sim.Enqueue(new SimCommand
+            {
+                ExecuteTick = sim.Tick + 1,
+                PlayerId = 0,
+                Kind = CommandKind.Move,
+                UnitIds = units.Select(u => u.Id).ToArray(),
+                X = WorldScale.CellCenter(cellX),
+                Y = WorldScale.CellCenter(cellY),
+            });
+        }
+
+        Order(40, 40);
+        Step(sim, 900);
+        AssertNear(units, 40, 40, "first order");
+        AssertSeparated(units);
+
+        Order(12, 18);
+        Step(sim, 900);
+        AssertNear(units, 12, 18, "second order");
+        AssertSeparated(units);
+        Assert.All(units, u => Assert.False(u.PathPending));
+    }
+
+    [Fact]
+    public void HaulerDocksAgainstTheBuilding()
+    {
+        var sim = PrototypeScenario.Create(Load());
+        SimEntity? hauler = null;
+        bool docked = false;
+        for (int n = 0; n < 2000 && !docked; n++)
+        {
+            sim.Step();
+            hauler = sim.Entities.First(e => e.TypeId == "tdo_hauler");
+            docked = hauler.Haul is HaulPhase.Loading or HaulPhase.Unloading;
+        }
+        Assert.True(docked, $"never docked, haul {hauler!.Haul} cell {hauler.CellX},{hauler.CellY}");
+        var site = sim.Entities.First(e => e.TypeId == "tdo_mine");
+        var refinery = sim.Entities.First(e => e.TypeId == "tdo_refinery");
+        var building = hauler!.Haul == HaulPhase.Unloading ? refinery : site;
+        long gap = GapToFootprint(hauler, building);
+        Assert.InRange(gap, 50L * 1000, 230L * 1000);
+    }
+
+    [Fact]
+    public void SpeedScaleHalvesTravel()
+    {
+        var data = Load();
+        Assert.Equal(500, data.Rules.SpeedScale.Raw);
+        var sim = new Simulation(data, SimMap.Blank(48, 48), 1);
+        sim.Players[0].Faction = "tdo";
+        var jeep = sim.SpawnUnit("tdo_jeep", 0, 4, 10);
+        long start = jeep.X.Raw;
+        sim.Enqueue(new SimCommand
+        {
+            ExecuteTick = 1,
+            PlayerId = 0,
+            Kind = CommandKind.Move,
+            UnitIds = new[] { jeep.Id },
+            X = WorldScale.CellCenter(30),
+            Y = WorldScale.CellCenter(10),
+        });
+        Step(sim, 22);
+        long moved = jeep.X.Raw - start;
+        long tile = WorldScale.TileWorldUnits * Fp.Scale;
+        double tiles = moved / (double)tile;
+        double expected = 4.49 * 0.5;
+        Assert.InRange(tiles, expected * 0.7, expected * 1.15);
+    }
+
+    [Fact]
+    public void FireRateScaleLengthensCooldowns()
+    {
+        int full = WorldScale.DurationTicks(Fp.Parse("0.8"), 20, Fp.FromInt(1));
+        int scaled = WorldScale.DurationTicks(Fp.Parse("0.8"), 20, Fp.Parse("0.75"));
+        Assert.Equal(16, full);
+        Assert.Equal(21, scaled);
+        Assert.True(scaled > full);
+    }
+
+    [Fact]
+    public void ConstructorPlacesARefinery()
+    {
+        var data = Load();
+        var sim = new Simulation(data, SimMap.Blank(32, 32), 1);
+        sim.Players[0].Faction = "tdo";
+        sim.Players[0].Credits = 5000;
+        var tech = sim.SpawnUnit("tdo_technician", 0, 4, 4);
+        sim.Enqueue(new SimCommand
+        {
+            ExecuteTick = 1,
+            PlayerId = 0,
+            Kind = CommandKind.Build,
+            UnitIds = new[] { tech.Id },
+            BuildingTypeId = "tdo_refinery",
+            X = WorldScale.CellCenter(12),
+            Y = WorldScale.CellCenter(8),
+        });
+        Step(sim, 1200);
+        Assert.Contains(sim.Entities, e => e.Alive && e.TypeId == "tdo_refinery" && e.PlayerId == 0);
+        Assert.Equal(4000, sim.Players[0].Credits);
+    }
+
+    [Fact]
+    public void HackerCapturesThenScrambles()
+    {
+        var data = Load();
+        var sim = new Simulation(data, SimMap.Blank(40, 40), 2);
+        sim.Players[0].Faction = "tdo";
+        sim.Players[1].Faction = "clnkr";
+        var centre = sim.SpawnUnit("computer_centre", -1, 12, 12);
+        var hacker = sim.SpawnUnit("tdo_hacker", 0, 8, 12);
+        var victim = sim.SpawnUnit("clnkr_scout", 1, 20, 12);
+        int victimCell = victim.CellX;
+        sim.Enqueue(new SimCommand
+        {
+            ExecuteTick = 1,
+            PlayerId = 0,
+            Kind = CommandKind.Hack,
+            UnitIds = new[] { hacker.Id },
+            TargetId = centre.Id,
+        });
+        int opened = -1;
+        int cellX = victim.CellX;
+        int cellY = victim.CellY;
+        int distracted = 0;
+        for (int n = 0; n < 1400; n++)
+        {
+            sim.Step();
+            if (opened < 0 && centre.AccessTicksLeft > 0)
+                opened = sim.Tick;
+            if (opened > 0 && sim.Tick == opened + 40)
+            {
+                cellX = victim.CellX;
+                cellY = victim.CellY;
+                distracted = victim.DistractedUntil;
+            }
+        }
+        Assert.Equal(0, centre.PlayerId);
+        int dx = cellX - victimCell;
+        int dy = cellY - 12;
+        Assert.True(dx * dx + dy * dy >= 4 || distracted > opened, $"scramble did not take, cell {cellX},{cellY} distracted {distracted}");
+    }
+
+    [Fact]
     public void HaulerRaisesCredits()
     {
         var sim = PrototypeScenario.Create(Load());
         int start = sim.Players[0].Credits;
-        Step(sim, 900);
+        Step(sim, 2000);
         var hauler = sim.Entities.First(e => e.TypeId == "tdo_hauler");
         Assert.True(sim.Players[0].Credits > start,
             $"credits {sim.Players[0].Credits} start {start} haul {hauler.Haul} cargo {hauler.CargoUnits} cell {hauler.CellX},{hauler.CellY} buffer {BufferOf(sim, 0)} deposit {DepositOf(sim, "deposit_ore")}");
@@ -305,6 +464,49 @@ public class SimulationTests
             X = WorldScale.CellCenter(70),
             Y = WorldScale.CellCenter(38),
         });
+    }
+
+    private static void AssertNear(List<SimEntity> units, int cellX, int cellY, string label)
+    {
+        foreach (var unit in units)
+        {
+            int dx = unit.CellX - cellX;
+            int dy = unit.CellY - cellY;
+            Assert.True(dx * dx + dy * dy <= 8, $"{label}: {unit.Id} at {unit.CellX},{unit.CellY} order {unit.Order} pending {unit.PathPending} wp {unit.Waypoint}/{unit.Path.Count}");
+        }
+    }
+
+    private static void AssertSeparated(List<SimEntity> units)
+    {
+        long min = (long)(0.4 * WorldScale.TileWorldUnits * Fp.Scale);
+        long min2 = min * min;
+        for (int i = 0; i < units.Count; i++)
+        {
+            for (int j = i + 1; j < units.Count; j++)
+            {
+                long dist = WorldScale.DistanceSquared(units[i].X, units[i].Y, units[j].X, units[j].Y);
+                Assert.True(dist >= min2, $"overlap {units[i].Id} and {units[j].Id}");
+            }
+        }
+    }
+
+    private static long GapToFootprint(SimEntity unit, SimEntity building)
+    {
+        long left = (long)building.CellX * WorldScale.TileWorldUnits * Fp.Scale;
+        long right = (long)(building.CellX + building.Footprint) * WorldScale.TileWorldUnits * Fp.Scale;
+        long top = (long)building.CellY * WorldScale.TileWorldUnits * Fp.Scale;
+        long bottom = (long)(building.CellY + building.Footprint) * WorldScale.TileWorldUnits * Fp.Scale;
+        long dx = 0;
+        if (unit.X.Raw < left)
+            dx = left - unit.X.Raw;
+        else if (unit.X.Raw > right)
+            dx = unit.X.Raw - right;
+        long dy = 0;
+        if (unit.Y.Raw < top)
+            dy = top - unit.Y.Raw;
+        else if (unit.Y.Raw > bottom)
+            dy = unit.Y.Raw - bottom;
+        return IntMath.Isqrt(dx * dx + dy * dy);
     }
 
     private static void Step(Simulation sim, int ticks)

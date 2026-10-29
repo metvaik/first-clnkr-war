@@ -1,5 +1,5 @@
-# Starting buildings. Placement and construction are stubbed:
-# the test map spawns these directly. speed is omitted; buildings are static.
+# Refineries and collectors start on the test map. Constructors can also place them.
+# speed is omitted; buildings are static.
 # Mining Site / Resource Collector figures are the "waiting on testing" defaults.
 
 buildings:
@@ -14,6 +14,7 @@ buildings:
     footprint: 3
     storage_cap: 10000
     sight: 12
+    build_s: 20
 
   - id: tdo_mine
     name: Mining Site
@@ -26,6 +27,7 @@ buildings:
     footprint: 2
     buffer: 1000
     sight: 12
+    build_s: 12
 
   - id: clnkr_refinery
     name: Reclamation Plant
@@ -38,6 +40,7 @@ buildings:
     footprint: 3
     storage_cap: 10000
     sight: 12
+    build_s: 20
 
   - id: clnkr_mine
     name: Resource Collector
@@ -50,3 +53,15 @@ buildings:
     footprint: 2
     buffer: 1000
     sight: 12
+    build_s: 12
+
+  # Neutral hack site. HP is a placeholder: the design tables do not list it.
+  - id: computer_centre
+    name: Computer Centre
+    role: computer_centre
+    shape: building
+    domain: ground
+    cost: 0
+    hp: 800
+    footprint: 2
+    sight: 8

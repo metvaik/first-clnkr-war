@@ -53,6 +53,12 @@ public sealed partial class Simulation
             var entity = _entities[i];
             if (!entity.Alive || entity.Kind != EntityKind.Unit)
                 continue;
+            if (entity.DistractedUntil > Tick)
+            {
+                entity.TargetId = 0;
+                entity.SalvoLeft = 0;
+                continue;
+            }
             var def = Def(entity);
             if (def.Weapons.Count == 0)
                 continue;
@@ -81,9 +87,9 @@ public sealed partial class Simulation
                 SpawnProjectile(entity, salvoTarget, def.Weapons[entity.SalvoWeapon]);
                 entity.SalvoLeft--;
                 if (entity.SalvoLeft > 0)
-                    entity.SalvoWait = SecondsToTicks(def.Weapons[entity.SalvoWeapon].SalvoInterval);
+                    entity.SalvoWait = WeaponTicks(def.Weapons[entity.SalvoWeapon].SalvoInterval);
                 else
-                    entity.WeaponCooldown[entity.SalvoWeapon] = SecondsToTicks(def.Weapons[entity.SalvoWeapon].Cooldown);
+                    entity.WeaponCooldown[entity.SalvoWeapon] = WeaponTicks(def.Weapons[entity.SalvoWeapon].Cooldown);
                 continue;
             }
 
@@ -113,9 +119,9 @@ public sealed partial class Simulation
                 SpawnProjectile(entity, target, weapon);
                 entity.SalvoLeft--;
                 if (entity.SalvoLeft > 0)
-                    entity.SalvoWait = SecondsToTicks(weapon.SalvoInterval);
+                    entity.SalvoWait = WeaponTicks(weapon.SalvoInterval);
                 else
-                    entity.WeaponCooldown[w] = SecondsToTicks(weapon.Cooldown);
+                    entity.WeaponCooldown[w] = WeaponTicks(weapon.Cooldown);
                 break;
             }
         }

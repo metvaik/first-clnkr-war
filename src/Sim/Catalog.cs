@@ -34,6 +34,9 @@ public static class Roles
     public const string Collector = "collector";
     public const string Combat = "combat";
     public const string Transport = "transport";
+    public const string Constructor = "constructor";
+    public const string Hacker = "hacker";
+    public const string ComputerCentre = "computer_centre";
 }
 
 public sealed class WeaponDef
@@ -116,6 +119,16 @@ public sealed class FactionDef
 public sealed class SimRules
 {
     public int TickHz { get; set; } = 20;
+    public Fp SpeedScale { get; set; } = Fp.FromInt(1);
+    public Fp FireRateScale { get; set; } = Fp.FromInt(1);
+    public int DefaultBuildSeconds { get; set; } = 20;
+    public Fp CaptureSeconds { get; set; } = Fp.FromInt(20);
+    public Fp InfiltrateSeconds { get; set; } = Fp.FromInt(15);
+    public Fp AccessWindowSeconds { get; set; } = Fp.FromInt(45);
+    public Fp AbilityCooldownSeconds { get; set; } = Fp.FromInt(20);
+    public int ScrambleMinTiles { get; set; } = 5;
+    public int ScrambleMaxTiles { get; set; } = 8;
+    public Fp ScrambleSeconds { get; set; } = Fp.FromInt(3);
     public Fp SightMax { get; set; } = Fp.FromInt(20);
     public int RangeBonusMaxPct { get; set; } = 25;
     public int ControlGroups { get; set; } = 10;

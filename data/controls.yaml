@@ -16,6 +16,8 @@ attack_move: Z
 switch_player: Tab
 pause: Space
 focus_base: Home
+place_refinery: N
+place_collector: M
 
 edge_scroll: true
 pan_speed: 40

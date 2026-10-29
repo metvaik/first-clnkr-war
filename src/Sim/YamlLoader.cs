@@ -74,6 +74,8 @@ public static class CatalogLoader
             rules.TickHz = Int(sim, "tick_hz", rules.TickHz);
             if (rules.TickHz < 1)
                 throw new DataSchemaException("sim.tick_hz must be >= 1.");
+            if (Has(sim, "speed_scale"))
+                rules.SpeedScale = Fixed(sim, "speed_scale");
         }
 
         if (Child(root, "limits") is YamlMappingNode limits)
@@ -91,6 +93,29 @@ public static class CatalogLoader
         {
             rules.TargetSearchIntervalTicks = Math.Max(1, Int(combat, "target_search_interval_ticks", rules.TargetSearchIntervalTicks));
             rules.FogUpdateIntervalTicks = Math.Max(1, Int(combat, "fog_update_interval_ticks", rules.FogUpdateIntervalTicks));
+            if (Has(combat, "fire_rate_scale"))
+                rules.FireRateScale = Fixed(combat, "fire_rate_scale");
+        }
+
+        if (Child(root, "construction") is YamlMappingNode construction)
+            rules.DefaultBuildSeconds = Math.Max(1, Int(construction, "default_build_s", rules.DefaultBuildSeconds));
+
+        if (Child(root, "hacking") is YamlMappingNode hacking)
+        {
+            if (Has(hacking, "capture_s"))
+                rules.CaptureSeconds = Fixed(hacking, "capture_s");
+            if (Has(hacking, "infiltrate_s"))
+                rules.InfiltrateSeconds = Fixed(hacking, "infiltrate_s");
+            if (Has(hacking, "access_window_s"))
+                rules.AccessWindowSeconds = Fixed(hacking, "access_window_s");
+            if (Has(hacking, "ability_cooldown_s"))
+                rules.AbilityCooldownSeconds = Fixed(hacking, "ability_cooldown_s");
+            if (Has(hacking, "scramble_s"))
+                rules.ScrambleSeconds = Fixed(hacking, "scramble_s");
+            rules.ScrambleMinTiles = Int(hacking, "scramble_min_tiles", rules.ScrambleMinTiles);
+            rules.ScrambleMaxTiles = Int(hacking, "scramble_max_tiles", rules.ScrambleMaxTiles);
+            if (rules.ScrambleMaxTiles < rules.ScrambleMinTiles)
+                rules.ScrambleMaxTiles = rules.ScrambleMinTiles;
         }
 
         if (Child(root, "movement") is YamlMappingNode movement && Has(movement, "separation_tiles"))

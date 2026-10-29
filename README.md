@@ -51,6 +51,9 @@ Bindings live in `data/controls.yaml`. Final hotkeys are intentionally not locke
 | **0–9** | Recall. Double-tap centres the camera |
 | **Tab** or the HUD dropdown | Switch the player slot you command |
 | **Home** | Centre on the active slot's base |
+| **N** | Place a refinery (select a Technician or Constructobot, then left click) |
+| **M** | Place a mining site / resource collector the same way |
+| Right click a Computer Centre | Hacker or Agent captures it, then infiltrates |
 | **Space** | Pause the simulation (camera still moves) |
 | **W A S D** or arrows | Pan |
 | **Q / E** | Rotate |
@@ -66,9 +69,13 @@ TDO is blue, C.L.N.K.R. is orange. Switching slots also switches fog of war and 
 
 ## How the match is laid out
 
-The map is 128×128 small tiles. A river with two land bridges splits the map. Rock is impassable to ground units. Each side starts with a refinery (TDO Refinery / C.L.N.K.R. Reclamation Plant), a collector on an ore field, one free hauler, and a handful of units. Rare-earth pockets sit near each base and beside the bridges. Gold terrain is ore, purple is rare earth.
+The map is 128×128 small tiles. Terrain is one heightmap mesh: corner vertices are shared, so slopes meet and there are no stepped cliffs. A river with two land bridges splits the map. Rock and water are still impassable to ground units. Each side starts with a refinery (TDO Refinery / C.L.N.K.R. Reclamation Plant), a collector on an ore field, one free hauler, and a handful of units. Rare-earth pockets sit near each base and beside the bridges. Gold terrain is ore, purple is rare earth.
 
-Haulers path from the nearest collector that still has ore to their home refinery, load, and unload at 100 credits per second. Rare earth pays 2×. Income stops when that player's refinery storage cap is full (10,000 per refinery).
+Haulers path to a dock point on the footprint edge of the nearest collector, then to their home refinery, and only then load or unload. Unload is 100 credits per second. Rare earth pays 2×. Income stops when that player's refinery storage cap is full (10,000 per refinery).
+
+The rendered tile matches the sim tile: 1 small tile is 512 world units and 2 on-screen units. A unit's on-screen pace is its design speed times `sim.speed_scale` (currently 0.5). `combat.fire_rate_scale` (currently 0.75) stretches weapon cooldowns and salvo gaps by `1 / scale`.
+
+Each side also starts with a Technician or Constructobot and a Hacker or Agent. Two neutral Computer Centres sit between the bases. A hacker docked at one captures it in 20 seconds, infiltrates for 15 seconds, then has a 45 second window. During that window Scramble Nav fires about every 20 seconds: one enemy unit is forced off its orders for 3 seconds. Progress is a blue bar on the building and a line in the HUD. Building placement deducts the design cost; structure build seconds are a placeholder (`build_s` on the building, or `construction.default_build_s`) because the design tables do not list them. Computer Centre hit points are a placeholder too.
 
 The Mobile SAM only shoots air. A Gunship and a Bird of Prey are on the map so that can be tested. Send the gunship over the other base, or attack-move both groups toward a bridge.
 
@@ -117,7 +124,7 @@ Commands are the only way to give orders. Each command is stamped with the tick 
 
 ## Stubbed
 
-Not in this prototype: AI, networking, campaign, hackers, Doomsday, squads, veterancy, transports (the APC and Warhorse move but do not carry), mines, stealth, fuel, construction and building placement, selling, refinery upgrades, healing, capture, audio, menus, and final art. Population is loaded (300) and not enforced. Player firepower, armour and speed levels exist (default 0, each level ±20%) and are not exposed in the HUD. Ground units do not block each other's paths; a small separation push keeps them from stacking.
+Not in this prototype: AI, networking, campaign, Doomsday, squads, veterancy, transports (the APC and Warhorse move but do not carry), mines, stealth, fuel, selling, refinery upgrades, healing, building capture, audio, menus, and final art. Hackers capture Computer Centres and cast Scramble Nav only; the other hack-site perks and the earned-ability list are not implemented. Constructors place a refinery or a collector; they do not build the rest of the roster. Population is loaded (300) and not enforced. Player firepower, armour and speed levels exist (default 0, each level ±20%) and are not exposed in the HUD. Ground units do not block each other's paths. A group move spreads them onto a formation of nearby cells, and a separation push keeps bodies from stacking. Health bars shrink from the left as HP falls.
 
 ## Known issues
 
@@ -132,7 +139,7 @@ Not in this prototype: AI, networking, campaign, hackers, Doomsday, squads, vete
 
 ## Verification
 
-`dotnet test` (22 tests) and `dotnet build` of the Godot project succeed on .NET SDK 8.0.427.
+`dotnet test` (28 tests) and `dotnet build` of the Godot project succeed on .NET SDK 8.0.427.
 
 Godot 4.7.2 .NET was also launched headless (`--headless --quit-after 90`) against this project. The test scene loaded, printed `Phase 1 ready` with 26 entities, and ran 90 frames without a script error. Headless mode uses the dummy renderer. Camera controls, picking, fog colours and the whitebox meshes still need a look in the editor window on your machine.
 

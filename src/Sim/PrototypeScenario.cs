@@ -31,6 +31,8 @@ public static class PrototypeScenario
         sim.SpawnUnit("tdo_dragoon", 0, 22, 29);
         sim.SpawnUnit("tdo_sam", 0, 26, 30);
         sim.SpawnUnit("tdo_gunship", 0, 16, 33);
+        sim.SpawnUnit("tdo_technician", 0, 16, 26);
+        sim.SpawnUnit("tdo_hacker", 0, 15, 28);
         _ = tdoRare;
 
         var clnkrOre = sim.SpawnDeposit(100, 104, 24000, rare: false);
@@ -49,7 +51,12 @@ public static class PrototypeScenario
         sim.SpawnUnit("clnkr_mk1", 1, 104, 96);
         sim.SpawnUnit("clnkr_assault_laser", 1, 96, 100);
         sim.SpawnUnit("clnkr_bird", 1, 114, 96);
+        sim.SpawnUnit("clnkr_constructobot", 1, 110, 104);
+        sim.SpawnUnit("clnkr_agent", 1, 106, 100);
         _ = clnkrRare;
+
+        sim.SpawnUnit("computer_centre", -1, 52, 48);
+        sim.SpawnUnit("computer_centre", -1, 74, 72);
 
         var centerSouth = sim.SpawnDeposit(74, 38, 8000, rare: true);
         var centerNorth = sim.SpawnDeposit(74, 90, 8000, rare: true);
